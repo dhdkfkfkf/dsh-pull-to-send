@@ -1,0 +1,50 @@
+{
+  "name": "dsh-pull-to-send",
+  "version": "0.1.0",
+  "description": "Press and pull the DSH composer upward to send — a big, single-stroke replacement for the tiny send button. No keyboard needed.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "composer",
+    "send",
+    "gesture",
+    "pull-to-send",
+    "animation"
+  ],
+  "author": "PULLTOSEND contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dhdkfkfkf/PULLTOSEND.git"
+  },
+  "homepage": "https://github.com/dhdkfkfkf/PULLTOSEND#readme",
+  "bugs": {
+    "url": "https://github.com/dhdkfkfkf/PULLTOSEND/issues"
+  }
+}
