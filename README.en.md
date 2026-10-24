@@ -9,7 +9,7 @@ Press the DSH composer, pull upward, release — the message flies out. Built fo
 ## Install
 
 ```bash
-dsh plugin --profile desktop add "github:dhdkfkfkf/PULLTOSEND"
+dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pulltosend"
 ```
 
 Restart DSH once after installing (adding the bundle itself needs a restart; code edits hot-reload via dsh-hmr afterwards).

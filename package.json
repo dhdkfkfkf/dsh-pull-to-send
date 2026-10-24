@@ -41,10 +41,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dhdkfkfkf/PULLTOSEND.git"
+    "url": "git+https://github.com/dhdkfkfkf/dsh-pulltosend.git"
   },
-  "homepage": "https://github.com/dhdkfkfkf/PULLTOSEND#readme",
+  "homepage": "https://github.com/dhdkfkfkf/dsh-pulltosend#readme",
   "bugs": {
-    "url": "https://github.com/dhdkfkfkf/PULLTOSEND/issues"
+    "url": "https://github.com/dhdkfkfkf/dsh-pulltosend/issues"
   }
 }
