@@ -9,7 +9,7 @@
 ## 安装
 
 ```bash
-dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pulltosend"
+dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pull-to-send"
 ```
 
 装完重启一次 DSH（添加 bundle 本身需要重启；之后改代码走 dsh-hmr 热更）。

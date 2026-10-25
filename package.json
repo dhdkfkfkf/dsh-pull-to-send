@@ -1,6 +1,6 @@
 {
   "name": "dsh-pull-to-send",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Press and pull the DSH composer upward to send — a big, single-stroke replacement for the tiny send button. No keyboard needed.",
   "type": "module",
   "main": "./index.js",
@@ -41,10 +41,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dhdkfkfkf/dsh-pulltosend.git"
+    "url": "git+https://github.com/dhdkfkfkf/dsh-pull-to-send.git"
   },
-  "homepage": "https://github.com/dhdkfkfkf/dsh-pulltosend#readme",
+  "homepage": "https://github.com/dhdkfkfkf/dsh-pull-to-send#readme",
   "bugs": {
-    "url": "https://github.com/dhdkfkfkf/dsh-pulltosend/issues"
+    "url": "https://github.com/dhdkfkfkf/dsh-pull-to-send/issues"
   }
 }

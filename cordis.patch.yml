@@ -5,5 +5,5 @@
 # `insert` below. Editing this file is picked up live (dsh-hmr watches the
 # profile patches), but adding/removing the bundle itself needs a restart.
 - insert:
-    - id: pull-to-send
+    - id: dsh-pull-to-send
       name: 'dsh-pull-to-send'
