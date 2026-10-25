@@ -28,6 +28,7 @@
   .app { width: min(720px, 100%); display: flex; flex-direction: column; padding: 24px 16px 28px; }
   header h1 { font-size: 16px; margin: 0 0 2px; }
   header p { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; }
+  header .cases { margin: 0 0 16px; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.8; }
   header kbd {
     font: 11px/1 ui-monospace, monospace; background: var(--panel);
     border: 1px solid var(--line); border-radius: 4px; padding: 2px 5px;
@@ -76,7 +77,12 @@
 <div class="app">
   <header>
     <h1>PULLTOSEND 手势测试台</h1>
-    <p>按住输入框往上拉，越过顶边松手 = 发送；回拖或 <kbd>Esc</kbd> 取消。武装前的提示气泡会告诉你差在哪一步。</p>
+    <p>按住输入框往上拉，越过顶边松手 = 发送；<strong>按住拖回输入框 = 取消（可再次拉起）</strong>，或 <kbd>Esc</kbd> 取消。武装前的提示气泡会告诉你差在哪一步。</p>
+    <ol class="cases">
+      <li><strong>拖回取消</strong>：拉起拎起后按住拖回输入框内 → 副本短回位、卡片恢复、松手不发送。</li>
+      <li><strong>回位后再拉</strong>：拖回后<strong>不松手</strong>再次上拉越顶 → 重新拎起 → 松手发送。</li>
+      <li><strong>回位中 ESC</strong>：拖回、回位动画进行中按 <kbd>Esc</kbd> → 无残留副本，页面可继续正常拖。</li>
+    </ol>
   </header>
 
   <div class="pane" data-conversation-session>

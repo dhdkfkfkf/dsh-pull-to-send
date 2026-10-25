@@ -39,6 +39,14 @@
  * point just above the composer instead. Cancels fly the clone back along its
  * path in CANCEL_MS.
  *
+ * DRAG-BACK CANCEL
+ * Armed is a two-way state: moving the pointer back inside the card rect
+ * disarms on the spot — the clone runs a short DISARM_RETURN_MS return, the
+ * real card restores, and the same held pointer can pull up and arm again.
+ * Releasing while disarmed (or never armed) never sends. An in-flight return
+ * owns the gesture slot for at most DISARM_RETURN_MS and its timer always
+ * frees it; re-arming hard-removes the returning clone.
+ *
  * WHY THE LISTENERS ARE IN THE BUBBLE PHASE
  * A capture listener would run before every other handler and could steal
  * presses a component already owns. In the bubble phase,
@@ -50,9 +58,14 @@
  *   - presses on buttons/links/menus inside the card are left alone;
  *   - an IME composition in flight (`data-composer-composing`) cancels the
  *     gesture instead of firing a half-composed draft;
- *   - Escape or `pointercancel` at any point cancels;
+ *   - Escape cancels at any point; `pointercancel` and window blur start a
+ *     GRACE_MS countdown — a transient focus blip keeps the drag alive, a
+ *     pointer that stays silent is cancelled (the slot is never stuck);
+ *   - a release that lands back inside the card or outside the viewport
+ *     never sends: drag-back and flick-past-the-edge both cancel;
  *   - another editable, the terminal (`.xterm`) and `[inert]` subtrees are
- *     untouched — the gesture starts only on the composer card itself.
+ *     untouched — the gesture starts only on the composer card itself;
+ *   - `window.__DSH_PULLTOSEND__.disable()` is an emergency off switch.
  *
  * MULTIPLE CONVERSATION PANES
  * The gesture binds to the card under the pointer, so embedded panes work with
@@ -76,7 +89,16 @@ window.__ModuleLoader__.load({
 		//#region tunables — every knob of v1 lives here, no settings panel
 
 		/** Upward distance past the card's top edge before the gesture arms. */
-		const ARM_DISTANCE = 14;
+		const ARM_DISTANCE = 24;
+		/** Grace window after window blur / pointercancel: transient focus
+		 *  blips (verified in the wild: a focus-changing click right before
+		 *  the press) must not kill a live drag; only a pointer that stays
+		 *  silent this long is considered lost. */
+		const GRACE_MS = 600;
+		/** Pill text while armed: the release contract stays visible. */
+		const ARMED_HINT = '松手即发送 · 拖回或 Esc 取消';
+		/** Plugin version, mirrored into the public debug handle. */
+		const VERSION = '0.2.0';
 		/** Invisible margin around the card that still counts as a press on it. */
 		const HIT_PAD = 12;
 		/** Pointer types allowed to send. Touch is deliberately excluded. */
@@ -105,6 +127,8 @@ window.__ModuleLoader__.load({
 		const CANCEL_MS = 320;
 		/** Cancel easing: decelerate back home. */
 		const CANCEL_EASING = 'cubic-bezier(0.3, 0, 0.3, 1)';
+		/** Drag-back disarm return time; the clone is already near the card. */
+		const DISARM_RETURN_MS = 150;
 		/** Upward travel before the pre-arm hint appears (px). */
 		const HINT_AFTER_PX = 8;
 		/** Gap between the pre-arm hint pill and the pointer (px). */
@@ -189,6 +213,9 @@ window.__ModuleLoader__.load({
 		/** gesture state; null when idle. */
 		let gesture = null;
 
+		/** Kill switch, set via `window.__DSH_PULLTOSEND__.disable()`. */
+		let disabled = false;
+
 		/** Card currently showing the grab cursor, or null. */
 		let hoverCard = null;
 
@@ -218,6 +245,29 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		/** Create (or reuse) the hint pill with the given text. */
+		function showHint(g, text) {
+			let pill = g.hint;
+			if (pill === null) {
+				ensureStyle();
+				pill = document.createElement('div');
+				pill.className = `${STYLE_ID}-hint`;
+				document.body.append(pill);
+				g.hint = pill;
+			}
+			pill.textContent = text;
+			return pill;
+		}
+
+		/** Position a hint pill near the pointer, clamped into the viewport. */
+		function placePill(pill, clientX, clientY) {
+			if (pill === null) return;
+			const width = pill.offsetWidth || 120;
+			const left = Math.min(Math.max(clientX, width / 2 + 8), window.innerWidth - width / 2 - 8);
+			pill.style.left = `${Math.round(left)}px`;
+			pill.style.top = `${Math.round(clientY - HINT_GAP_PX)}px`;
+		}
+
 		/**
 		 * Pre-arm guidance: the silent failure modes (pull too shallow, sideways,
 		 * empty draft) become a small pill that follows the pointer, so a pull
@@ -237,21 +287,9 @@ window.__ModuleLoader__.load({
 			let text;
 			if (button === null) text = '当前无法发送';
 			else if (draftText(g.composer) === '') text = '先输入内容，再上拉发送';
-			else if (aboveTop < ARM_DISTANCE) text = '继续上拉，越过输入框顶部';
+			else if (aboveTop < ARM_DISTANCE) text = `再拉 ${Math.ceil(ARM_DISTANCE - aboveTop)}px 越过输入框顶部`;
 			else return;
-			let pill = g.hint;
-			if (pill === null) {
-				ensureStyle();
-				pill = document.createElement('div');
-				pill.className = `${STYLE_ID}-hint`;
-				document.body.append(pill);
-				g.hint = pill;
-			}
-			pill.textContent = text;
-			const width = pill.offsetWidth || 120;
-			const left = Math.min(Math.max(event.clientX, width / 2 + 8), window.innerWidth - width / 2 - 8);
-			pill.style.left = `${Math.round(left)}px`;
-			pill.style.top = `${Math.round(event.clientY - HINT_GAP_PX)}px`;
+			placePill(showHint(g, text), event.clientX, event.clientY);
 		}
 
 		/**
@@ -419,6 +457,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		 * @param event - the pointerdown that started it.
 		 */
 		function onPress(event) {
+			if (disabled) return;
 			if (event.defaultPrevented || event.button !== 0) return;
 			if (!POINTER_TYPES.has(event.pointerType)) return;
 			const target = elementOf(event);
@@ -442,11 +481,16 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				rect: card.getBoundingClientRect(),
 				armed: false,
 				clone: null,
+				returningClone: null,
+				returnTimer: 0,
+				cardTimer: 0,
+				holding: true,
 				x: 0, y: 0, scale: 1,
 				targetX: 0, targetY: 0,
 				raf: 0,
 				following: false,
 				hint: null,
+				graceTimer: 0,
 			};
 			window.addEventListener('pointermove', onMove);
 			window.addEventListener('pointerup', onRelease);
@@ -462,10 +506,20 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		function onMove(event) {
 			const g = gesture;
 			if (g === null || event.pointerId !== g.pointerId) return;
+			clearGrace(g);
 			const dx = event.clientX - g.startX;
 			const dy = event.clientY - g.startY;
 			// An IME taking over mid-pull cancels instead of firing a half draft.
 			if (g.composer.hasAttribute('data-composer-composing')) { cancelGesture(); return; }
+			// Drag-back disarm: a pointer back inside the card cancels the armed
+			// pull but keeps the gesture alive, so the pull can be repeated.
+			if (g.armed) {
+				const r = g.rect;
+				if (event.clientX >= r.left && event.clientX <= r.right &&
+					event.clientY >= r.top && event.clientY <= r.bottom) {
+					disarm(g);
+				}
+			}
 			if (!g.armed) {
 				const aboveTop = g.rect.top - event.clientY;
 				updateHint(g, event, dy, dx, aboveTop);
@@ -478,6 +532,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				g.targetX = event.clientX - g.grabDx;
 				g.targetY = event.clientY - g.grabDy;
 				followLoop(g);
+				placePill(g.hint, event.clientX, event.clientY);
 			}
 		}
 
@@ -488,11 +543,14 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		 * @param y - pointer y.
 		 */
 		function arm(g, x, y) {
+			// A disarm return still in flight must not leave two clones behind.
+			finishReturn(g);
 			g.armed = true;
 			removeHint(g);
 			ensureStyle();
 			setGrabbing(true);
 			g.clone = makeClone(g.card, g.rect);
+			showHint(g, ARMED_HINT);
 			g.card.classList.add(`${STYLE_ID}-card`, `${STYLE_ID}-card-lifted`);
 			g.x = x - g.grabDx;
 			g.y = y - g.grabDy;
@@ -532,27 +590,65 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		function onRelease(event) {
 			const g = gesture;
 			if (g === null || event.pointerId !== g.pointerId) return;
+			clearGrace(g);
+			g.holding = false;
 			detach();
 			if (g.armed && g.clone !== null) {
+				// A release that lands back inside the card, or outside the
+				// viewport entirely, must never fire the send. The card check
+				// catches a flick that crossed back between two moves; the
+				// viewport check catches a release past the window edge (the
+				// OS still delivers that pointerup with real coordinates).
+				const r = g.rect;
+				const inCard = event.clientX >= r.left && event.clientX <= r.right
+					&& event.clientY >= r.top && event.clientY <= r.bottom;
+				const inViewport = event.clientX >= 0 && event.clientX <= window.innerWidth
+					&& event.clientY >= 0 && event.clientY <= window.innerHeight;
 				const button = sendButton(g.card);
-				if (button !== null && draftText(g.composer) !== '') {
+				if (!inCard && inViewport && button !== null && draftText(g.composer) !== '') {
 					send(g, button);
 					return;
 				}
 				flyBack(g);
 				return;
 			}
-			// A pull that never armed is a quiet no-op — but the gesture slot
-			// must be freed, or every later press is swallowed (v0.1.2 fix).
-			gesture = null;
-			removeHint(g);
+			// A pull that never armed — or was disarmed by dragging back — is a
+			// quiet no-op. An in-flight disarm return owns the gesture slot for
+			// at most DISARM_RETURN_MS; its timer always frees it (v0.1.2 lesson:
+			// the slot must never be stuck, and here it is never stuck forever).
+			if (g.returningClone === null) {
+				gesture = null;
+				removeHint(g);
+			}
 		}
 
 		/**
-		 * Pointercancel / window blur: always cancel.
+		 * Pointercancel / window blur: the pointer may be gone for good, but
+		 * transient focus blips fire these too while the drag is still alive
+		 * (a focus-changing click right before the press is one verified
+		 * trigger). Arm the grace countdown instead of killing the gesture;
+		 * any further pointer event cancels it.
 		 */
 		function onCancel() {
-			if (gesture !== null) cancelGesture();
+			const g = gesture;
+			if (g !== null && g.holding) armGrace(g);
+		}
+
+		/** Start (or restart) the lost-pointer grace countdown. */
+		function armGrace(g) {
+			if (g.graceTimer !== 0) window.clearTimeout(g.graceTimer);
+			g.graceTimer = window.setTimeout(() => {
+				g.graceTimer = 0;
+				if (gesture === g && g.holding) cancelGesture();
+			}, GRACE_MS);
+		}
+
+		/** A pointer event arrived: the drag is still alive. */
+		function clearGrace(g) {
+			if (g.graceTimer !== 0) {
+				window.clearTimeout(g.graceTimer);
+				g.graceTimer = 0;
+			}
 		}
 
 		/**
@@ -637,6 +733,50 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		}
 
 		/**
+		 * Drag-back disarm: send the clone home on a short return and restore
+		 * the card, but keep the gesture and the held pointer alive so the
+		 * pull can be repeated within the same press.
+		 * @param g - the gesture.
+		 */
+		function disarm(g) {
+			g.armed = false;
+			g.following = false;
+			if (g.raf !== 0) { cancelAnimationFrame(g.raf); g.raf = 0; }
+			const clone = g.clone;
+			g.clone = null;
+			setGrabbing(false);
+			removeHint(g);
+			clone.style.transition = `left ${DISARM_RETURN_MS}ms ${CANCEL_EASING}, top ${DISARM_RETURN_MS}ms ${CANCEL_EASING}, transform ${DISARM_RETURN_MS}ms ${CANCEL_EASING}`;
+			placeClone(clone, g.rect, 1);
+			shadeClone(clone, 0);
+			g.returningClone = clone;
+			g.returnTimer = window.setTimeout(() => {
+				g.returnTimer = 0;
+				g.returningClone = null;
+				clone.remove();
+				// The slot is released the moment the pointer is gone; while
+				// still held the gesture stays alive for another pull.
+				if (gesture === g && !g.holding) gesture = null;
+			}, DISARM_RETURN_MS);
+			g.card.classList.remove(`${STYLE_ID}-card-lifted`);
+			g.cardTimer = window.setTimeout(() => {
+				g.cardTimer = 0;
+				g.card.classList.remove(`${STYLE_ID}-card`);
+			}, RETURN_MS);
+		}
+
+		/**
+		 * Hard-remove an in-flight disarm return and its pending timers, so a
+		 * re-arm or a terminal path never leaves orphan clones behind.
+		 * @param g - the gesture.
+		 */
+		function finishReturn(g) {
+			if (g.returnTimer !== 0) { window.clearTimeout(g.returnTimer); g.returnTimer = 0; }
+			if (g.cardTimer !== 0) { window.clearTimeout(g.cardTimer); g.cardTimer = 0; }
+			if (g.returningClone !== null) { g.returningClone.remove(); g.returningClone = null; }
+		}
+
+		/**
 		 * Cancel: fly the clone home along its path, then destroy it.
 		 * @param g - the gesture.
 		 */
@@ -661,7 +801,10 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			const g = gesture;
 			if (g === null) return;
 			detach();
+			clearGrace(g);
+			g.holding = false;
 			gesture = null;
+			finishReturn(g);
 			setGrabbing(false);
 			removeHint(g);
 			if (g.raf !== 0) cancelAnimationFrame(g.raf);
@@ -685,11 +828,28 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			ctx.effect(
 				() => {
 					ensureStyle();
+					// Public debug handle: version report and emergency off.
+					window.__DSH_PULLTOSEND__ = {
+						version: VERSION,
+						disable() {
+							disabled = true;
+							if (gesture !== null) cancelGesture();
+							return true;
+						},
+					};
 					document.addEventListener('pointerdown', onPress);
 					document.addEventListener('pointerover', onHover, { passive: true });
+					// One-shot layout check: if the composer anchors never show
+					// up, say so once instead of failing silently.
+					window.setTimeout(() => {
+						if (document.querySelector(`${CARD}, ${COMPOSER}`) === null) {
+							console.warn(`[${PLUGIN_ID}] no composer anchors found — the DSH layout may have changed; the gesture stays dormant. Call window.__DSH_PULLTOSEND__.disable() to turn it off.`);
+						}
+					}, 4000);
 					return () => {
 						document.removeEventListener('pointerdown', onPress);
 						document.removeEventListener('pointerover', onHover);
+						if (window.__DSH_PULLTOSEND__ !== undefined) delete window.__DSH_PULLTOSEND__;
 						if (hoverCard !== null) hoverCard.classList.remove(`${STYLE_ID}-grabbable`);
 						hoverCard = null;
 						setGrabbing(false);
