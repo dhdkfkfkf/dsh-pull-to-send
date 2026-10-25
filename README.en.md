@@ -18,7 +18,7 @@ Restart DSH once after installing (adding the bundle itself needs a restart; cod
 
 | Action | Result |
 | --- | --- |
-| Press the composer card, pull up past its top edge by ≥24px | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims |
+| Press the composer card (a 12px halo around it counts too), pull up past its top edge by ≥14px | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims; hovering shows a grab cursor, dragging switches to grabbing |
 | Release while armed | Fires the send control's current primary action (idle = send, generating = queue/steer); the clone FLIPs into the new message bubble with a crossfade |
 | Below threshold / horizontal-dominant drag / Esc / pointercancel | Cancel: the clone flies back along its path in 320ms |
 
@@ -36,8 +36,9 @@ Zero build, single-file `client.js`; every parameter is a named constant at the 
 
 | Constant | Default | Meaning |
 | --- | --- | --- |
-| `ARM_DISTANCE` | 24px | Distance past the composer's top edge before arming |
-| `DAMPING` | 0.9 | Per-frame follow factor of the clone toward the pointer |
+| `ARM_DISTANCE` | 14px | Distance past the composer's top edge before arming |
+| `HIT_PAD` | 12px | Invisible hit-area halo around the card |
+| `DAMPING` | 0.95 | Per-frame follow factor of the clone toward the pointer (higher = tighter tracking) |
 | `MAX_SCALE` | 1.02 | Clone scale at full lift |
 | `FLIP_MS` | 400ms | Flight time of the send FLIP into the bubble |
 | `BUBBLE_LEAD_MS` | 80ms | How early the real bubble fades in before landing |

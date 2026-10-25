@@ -18,7 +18,7 @@ dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pulltosend"
 
 | 动作 | 结果 |
 | --- | --- |
-| 在输入框卡片上按下，向上拉出卡片上边缘 ≥24px | 武装：输入框副本拎起，跟随指针（阻尼跟随、微放大、阴影加深），真输入框缩小变暗 |
+| 在输入框卡片（含周边 12px 缓冲区）上按下，向上拉出卡片上边缘 ≥14px | 武装：输入框副本拎起，跟随指针（阻尼跟随、微放大、阴影加深），真输入框缩小变暗；悬停卡片显示 grab 光标，拖动中全程 grabbing |
 | 武装后松手 | 点击发送按钮的当前主行为（空闲=发送，生成中=排队/插话），副本 FLIP 飞入新消息气泡，真气泡交叉淡入 |
 | 未拉出阈值 / 横向拖拽占优 / 按 Esc / pointercancel | 取消：副本沿原路 320ms 弹回 |
 
@@ -36,8 +36,9 @@ dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pulltosend"
 
 | 常量 | 默认 | 含义 |
 | --- | --- | --- |
-| `ARM_DISTANCE` | 24px | 越过输入框上边缘多少距离才武装 |
-| `DAMPING` | 0.9 | 副本跟随指针的每帧插值系数 |
+| `ARM_DISTANCE` | 14px | 越过输入框上边缘多少距离才武装 |
+| `HIT_PAD` | 12px | 卡片四周的隐形响应缓冲区 |
+| `DAMPING` | 0.95 | 副本跟随指针的每帧插值系数（越大越跟手） |
 | `MAX_SCALE` | 1.02 | 拎起时最大放大 |
 | `FLIP_MS` | 400ms | 松手后副本飞入气泡的时长 |
 | `BUBBLE_LEAD_MS` | 80ms | 真气泡提前淡入的提前量 |

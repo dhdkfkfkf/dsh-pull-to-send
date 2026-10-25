@@ -76,17 +76,19 @@ window.__ModuleLoader__.load({
 		//#region tunables — every knob of v1 lives here, no settings panel
 
 		/** Upward distance past the card's top edge before the gesture arms. */
-		const ARM_DISTANCE = 24;
+		const ARM_DISTANCE = 14;
+		/** Invisible margin around the card that still counts as a press on it. */
+		const HIT_PAD = 12;
 		/** Pointer types allowed to send. Touch is deliberately excluded. */
 		const POINTER_TYPES = new Set(['mouse', 'pen']);
 		/** Per-frame follow factor of the clone toward the pointer (0..1]. */
-		const DAMPING = 0.9;
+		const DAMPING = 0.95;
 		/** Clone scale at full lift (starts at 1.0). */
 		const MAX_SCALE = 1.02;
 		/** Flight time of the send FLIP, in ms (spec: 360–420). */
 		const FLIP_MS = 400;
-		/** Easing of the send FLIP: fast out, soft landing. */
-		const FLIP_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+		/** Easing of the send FLIP: fast out, slight overshoot, soft landing. */
+		const FLIP_EASING = 'cubic-bezier(0.22, 1.12, 0.36, 1)';
 		/** The real bubble starts fading in this long before the clone lands. */
 		const BUBBLE_LEAD_MS = 80;
 		/** Fade-in duration of the real bubble. */
@@ -162,16 +164,47 @@ window.__ModuleLoader__.load({
 		function cardOf(event) {
 			const direct = elementOf(event)?.closest(CARD);
 			if (direct !== null && direct !== undefined) return direct;
-			if (typeof document.elementsFromPoint !== 'function') return null;
-			for (const el of document.elementsFromPoint(event.clientX, event.clientY)) {
-				const card = el.closest?.(CARD);
-				if (card !== null && card !== undefined) return card;
+			if (typeof document.elementsFromPoint === 'function') {
+				for (const el of document.elementsFromPoint(event.clientX, event.clientY)) {
+					const card = el.closest?.(CARD);
+					if (card !== null && card !== undefined) return card;
+				}
+			}
+			// Presses just outside the card still belong to it — a bigger target
+			// makes the stroke easy to start without changing the card's layout.
+			for (const card of document.querySelectorAll(CARD)) {
+				if (!(card instanceof HTMLElement)) continue;
+				const r = card.getBoundingClientRect();
+				if (r.width === 0 && r.height === 0) continue;
+				if (event.clientX >= r.left - HIT_PAD && event.clientX <= r.right + HIT_PAD
+					&& event.clientY >= r.top - HIT_PAD && event.clientY <= r.bottom + HIT_PAD) return card;
 			}
 			return null;
 		}
 
 		/** gesture state; null when idle. */
 		let gesture = null;
+
+		/** Card currently showing the grab cursor, or null. */
+		let hoverCard = null;
+
+		/**
+		 * Hover affordance: show `grab` over the card (masks included, since
+		 * cardOf sees through them) while its composer can actually take a draft.
+		 * @param event - the pointerover.
+		 */
+		function onHover(event) {
+			const card = cardOf(event);
+			if (card === hoverCard) return;
+			if (hoverCard !== null) hoverCard.classList.remove(`${STYLE_ID}-grabbable`);
+			hoverCard = card instanceof HTMLElement && usable(card.querySelector(COMPOSER)) ? card : null;
+			if (hoverCard !== null) hoverCard.classList.add(`${STYLE_ID}-grabbable`);
+		}
+
+		/** `grabbing` cursor + selection suppression while a clone is lifted. */
+		function setGrabbing(on) {
+			document.body.classList.toggle(`${STYLE_ID}-grabbing`, on);
+		}
 
 		/**
 		 * Is the composer editable, not inert, and laid out?
@@ -227,6 +260,9 @@ window.__ModuleLoader__.load({
   z-index: 2147483646; will-change: transform, opacity; box-sizing: border-box; }
 .${STYLE_ID}-bubble-in { animation: ${STYLE_ID}-fadein ${BUBBLE_FADE_MS}ms ease both; }
 @keyframes ${STYLE_ID}-fadein { from { opacity: 0; } to { opacity: 1; } }
+.${STYLE_ID}-grabbable, .${STYLE_ID}-grabbable * { cursor: grab; }
+.${STYLE_ID}-grabbable :is(button, a, [role="button"], [aria-haspopup]) { cursor: pointer; }
+body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 `;
 			document.head.append(style);
 		}
@@ -400,6 +436,7 @@ window.__ModuleLoader__.load({
 		function arm(g, x, y) {
 			g.armed = true;
 			ensureStyle();
+			setGrabbing(true);
 			g.clone = makeClone(g.card, g.rect);
 			g.card.classList.add(`${STYLE_ID}-card`, `${STYLE_ID}-card-lifted`);
 			g.x = x - g.grabDx;
@@ -483,6 +520,7 @@ window.__ModuleLoader__.load({
 		function send(g, button) {
 			gesture = null;
 			// The real card returns immediately; it does not wait for the flight.
+			setGrabbing(false);
 			g.card.classList.remove(`${STYLE_ID}-card-lifted`);
 			window.setTimeout(() => g.card.classList.remove(`${STYLE_ID}-card`), RETURN_MS);
 			button.click();
@@ -545,6 +583,7 @@ window.__ModuleLoader__.load({
 		function flyBack(g) {
 			gesture = null;
 			g.following = false;
+			setGrabbing(false);
 			if (g.raf !== 0) cancelAnimationFrame(g.raf);
 			const clone = g.clone;
 			clone.style.transition = `left ${CANCEL_MS}ms ${CANCEL_EASING}, top ${CANCEL_MS}ms ${CANCEL_EASING}, transform ${CANCEL_MS}ms ${CANCEL_EASING}`;
@@ -563,6 +602,7 @@ window.__ModuleLoader__.load({
 			if (g === null) return;
 			detach();
 			gesture = null;
+			setGrabbing(false);
 			if (g.raf !== 0) cancelAnimationFrame(g.raf);
 			if (g.clone !== null) {
 				g.following = false;
@@ -585,8 +625,13 @@ window.__ModuleLoader__.load({
 				() => {
 					ensureStyle();
 					document.addEventListener('pointerdown', onPress);
+					document.addEventListener('pointerover', onHover, { passive: true });
 					return () => {
 						document.removeEventListener('pointerdown', onPress);
+						document.removeEventListener('pointerover', onHover);
+						if (hoverCard !== null) hoverCard.classList.remove(`${STYLE_ID}-grabbable`);
+						hoverCard = null;
+						setGrabbing(false);
 						if (gesture !== null) cancelGesture();
 					};
 				},
