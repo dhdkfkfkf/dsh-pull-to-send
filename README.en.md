@@ -1,6 +1,6 @@
 # PULLTOSEND
 
-Press the DSH composer, pull upward, release — the message flies out. Built for "the send button is too small to hit, and Enter needs both hands."
+Press the DSH composer, pull upward, release — the message flies out. Keep holding to drag it back and cancel, or drag clear of the conversation to void it.
 
 Three drags turn sending into muscle memory:
 
