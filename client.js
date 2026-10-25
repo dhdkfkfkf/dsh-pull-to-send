@@ -96,9 +96,14 @@ window.__ModuleLoader__.load({
 		 *  silent this long is considered lost. */
 		const GRACE_MS = 600;
 		/** Plugin version, mirrored into the public debug handle. */
-		const VERSION = '0.2.1';
+		const VERSION = '0.3.0';
 		/** Invisible margin around the card that still counts as a press on it. */
 		const HIT_PAD = 12;
+		/** Gap kept between the usable drop band and the window edge. Small on
+		 *  purpose: the conversation surface already reaches the window edge, so
+		 *  this only rejects a pointer pinned to the outermost pixels (screen
+		 *  edge, task bar) while leaving the rest of the right side usable. */
+		const EDGE_MARGIN = 8;
 		/** Pointer types allowed to send. Touch is deliberately excluded. */
 		const POINTER_TYPES = new Set(['mouse', 'pen']);
 		/** Per-frame follow factor of the clone toward the pointer (0..1]. */
@@ -267,6 +272,46 @@ window.__ModuleLoader__.load({
 			return (composer.textContent ?? '').trim();
 		}
 
+		/**
+		 * The rectangle a release must land in to count as a send.
+		 *
+		 * Left edge follows the composer (so a narrow pane widens the usable
+		 * band instead of pinning it to the window), right edge is the
+		 * conversation surface, top is the top of the chat body, bottom is the
+		 * top of the composer card. Anything else — the window edge, the task
+		 * bar, another application — is a cancel.
+		 * @param card - the composer card of the gesture.
+		 * @returns the live drop bounds in viewport coordinates.
+		 */
+		function dropBounds(card) {
+			const cardRect = card.getBoundingClientRect();
+			const body = card.closest(CHAT_BODY)?.getBoundingClientRect() ?? null;
+			const left = cardRect.left;
+			const right = body !== null && body.right > left ? body.right : window.innerWidth;
+			const top = body !== null ? Math.max(0, body.top) : 0;
+			const bottom = cardRect.top;
+			return {
+				left,
+				// The conversation surface reaches the window edge in the default
+				// layout, so the raw box would let a pointer pinned against the
+				// screen edge count as a valid drop. Keep EDGE_MARGIN inside it.
+				right: Math.min(right, window.innerWidth - EDGE_MARGIN),
+				top,
+				bottom,
+			};
+		}
+
+		/**
+		 * Is a viewport point inside the drop bounds?
+		 * @param rect - bounds from {@link dropBounds}.
+		 * @param x - pointer x.
+		 * @param y - pointer y.
+		 * @returns true when a release here should send.
+		 */
+		function inDropZone(rect, x, y) {
+			return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+		}
+
 		//#region styles
 
 		const STYLE_ID = 'dsh-pull-to-send-style';
@@ -415,6 +460,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				grabDx: event.clientX - card.getBoundingClientRect().left,
 				grabDy: event.clientY - card.getBoundingClientRect().top,
 				rect: card.getBoundingClientRect(),
+				bounds: dropBounds(card),
 				armed: false,
 				clone: null,
 				returningClone: null,
@@ -446,6 +492,13 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			const dy = event.clientY - g.startY;
 			// An IME taking over mid-pull cancels instead of firing a half draft.
 			if (g.composer.hasAttribute('data-composer-composing')) { cancelGesture(); return; }
+			// Leaving the drop band aborts the whole drag on the spot: the clone
+			// springs back, the card settles, and this press is spent — the pull
+			// has to be started again from the composer.
+			if (g.armed && !inDropZone(g.bounds, event.clientX, event.clientY)) {
+				cancelGesture();
+				return;
+			}
 			// Drag-back disarm: a pointer back inside the card cancels the armed
 			// pull but keeps the gesture alive, so the pull can be repeated.
 			if (g.armed) {
@@ -525,18 +578,20 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			g.holding = false;
 			detach();
 			if (g.armed && g.clone !== null) {
-				// A release that lands back inside the card, or outside the
-				// viewport entirely, must never fire the send. The card check
-				// catches a flick that crossed back between two moves; the
-				// viewport check catches a release past the window edge (the
-				// OS still delivers that pointerup with real coordinates).
+				// Leaving the drop band already aborts the drag in onMove, so a
+				// release inside the band is the normal path. The checks below
+				// are the safety net for a release that jumped across the
+				// boundary between two pointer samples (a fast flick), or that
+				// landed outside the window entirely — window edge, task bar,
+				// another application.
 				const r = g.rect;
 				const inCard = event.clientX >= r.left && event.clientX <= r.right
 					&& event.clientY >= r.top && event.clientY <= r.bottom;
 				const inViewport = event.clientX >= 0 && event.clientX <= window.innerWidth
 					&& event.clientY >= 0 && event.clientY <= window.innerHeight;
+				const inBand = inDropZone(g.bounds, event.clientX, event.clientY);
 				const button = sendButton(g.card);
-				if (!inCard && inViewport && button !== null && draftText(g.composer) !== '') {
+				if (!inCard && inViewport && inBand && button !== null && draftText(g.composer) !== '') {
 					send(g, button);
 					return;
 				}
@@ -759,6 +814,14 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 					// Public debug handle: version report and emergency off.
 					window.__DSH_PULLTOSEND__ = {
 						version: VERSION,
+						/** Read-only gesture snapshot for diagnostics. */
+						state() {
+							const g = gesture;
+							return g === null ? null : {
+								armed: g.armed, holding: g.holding, pointerId: g.pointerId,
+								hasClone: g.clone !== null, returning: g.returningClone !== null,
+							};
+						},
 						disable() {
 							disabled = true;
 							if (gesture !== null) cancelGesture();

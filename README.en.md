@@ -2,6 +2,12 @@
 
 Press the DSH composer, pull upward, release — the message flies out. Built for "the send button is too small to hit, and Enter needs both hands."
 
+Three drags turn sending into muscle memory:
+
+- **Pull out to send** — drag up from the composer; the message hangs in the air, and letting go sends it.
+- **Pull back to cancel** — change your mind and drag the pointer back into the composer; everything returns and the draft is still there.
+- **Pull away to cancel** — fling it to the screen edge, the task bar or another window and the gesture is voided on the spot, never mis-sent.
+
 [中文](./README.md)
 
 ## Install
@@ -12,16 +18,28 @@ dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pull-to-send"
 
 Restart DSH once after installing (adding the bundle itself needs a restart; code edits hot-reload via dsh-hmr afterwards).
 
-## The gesture
+## The three drags
 
-| Action | Result |
+| What you do | What happens |
 | --- | --- |
-| Press the composer card (a 12px halo around it counts too), pull up past its top edge by **≥24px** | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims; hovering shows a grab cursor, dragging switches to grabbing |
-| Release while armed | Fires the send control's current primary action (idle = send, generating = queue/steer); the clone FLIPs into the new message bubble with a crossfade |
-| **Drag back into the composer card while armed** | **Disarms**: the clone returns in 150ms and vanishes, the card restores, the draft is untouched; pulling out again in the same press re-arms (you can change your mind as often as you like) |
-| Below threshold / horizontal-dominant drag / released inside the card / pointer leaves the viewport / Esc / pointercancel | Cancel: the clone flies back along its path in 320ms |
+| **Pull out**: press the composer card (a 12px halo around it counts too), pull up past its top edge by **≥24px** | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims; hovering shows a grab cursor, dragging switches to grabbing |
+| **Release** while armed | Fires the send control's current primary action (idle = send, generating = queue/steer); the clone FLIPs into the new message bubble with a crossfade |
+| **Pull back**: drag the pointer back into the composer card while armed | Disarms: the clone returns in 150ms and vanishes, the card restores, the draft is untouched; pulling out again in the same press re-arms, so you can change your mind as often as you like |
+| **Pull away**: drag the pointer out of the droppable area while armed | Cancels immediately: the clone springs back along its path, the cursor restores, this press is spent, releasing sends nothing, and a new drag has to start from the composer |
+| Below threshold / horizontal-dominant drag / released inside the card / Esc / pointercancel | Cancel: the clone flies back along its path in 320ms |
 
-> **Breaking change in v0.2.0**: previously, pulling out and then dragging back to release inside the card still sent. Now dragging back cancels — releasing sends nothing.
+### The droppable area
+
+A release only sends when it lands inside this area:
+
+| Edge | Where |
+| --- | --- |
+| Left | The composer card's left edge |
+| Right | The conversation surface's right edge |
+| Top | The top of the conversation area |
+| Bottom | The composer card's top edge |
+
+Anything outside is a cancel — the screen edge, the task bar, another application. To keep a pointer pinned to the screen edge detectable as "outside", the right edge is additionally inset by 8px.
 
 No text prompts anywhere: the lifted clone itself is the armed signal.
 
@@ -34,7 +52,7 @@ No text prompts anywhere: the lifted clone itself is the armed signal.
 | IME composition in flight | The gesture cancels the moment composition starts; half-typed Pinyin never sends |
 | Touch | Only mouse and pen respond; scrolling never accidentally sends |
 | Buttons / links / menus on the card | Their presses are their own |
-| Releasing outside the window | Treated as a cancel — moving the pointer out of the viewport gives up, and coming back does not re-send on its own |
+| Releasing outside the window | Treated as a cancel |
 
 ## Tunables
 
@@ -43,6 +61,7 @@ Zero build, single-file `client.js`; every parameter is a named constant at the 
 | Constant | Default | Meaning |
 | --- | --- | --- |
 | `ARM_DISTANCE` | 24px | Distance past the composer's top edge before arming |
+| `EDGE_MARGIN` | 8px | Safety gap kept between the droppable area and the window edge |
 | `DISARM_RETURN_MS` | 150ms | Clone return time when dragged back into the card |
 | `HIT_PAD` | 12px | Invisible hit-area halo around the card |
 | `DAMPING` | 0.95 | Per-frame follow factor of the clone toward the pointer (higher = tighter tracking) |
@@ -65,7 +84,7 @@ window.__DSH_PULLTOSEND__.version     // confirm the plugin is actually loaded
 
 ## Local test bench
 
-Try it without installing anything: open `test.html` in any browser. A built-in shim activates `client.js` immediately against a mock DOM that replicates every anchor (sending, bubble landing, a simulated reply, queue-while-generating), so the gesture and animation are the real code paths. The page lists three cases: drag-back cancel, re-arm after drag-back, and Esc during the return.
+Try it without installing anything: open `test.html` in any browser. A built-in shim activates `client.js` immediately against a mock DOM that replicates every anchor (sending, bubble landing, a simulated reply, queue-while-generating), so the gesture and animation are the real code paths.
 
 ## Compatibility
 

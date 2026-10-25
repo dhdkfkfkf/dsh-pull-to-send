@@ -1,6 +1,6 @@
 {
   "name": "dsh-pull-to-send",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Press and pull the DSH composer upward to send — a big, single-stroke replacement for the tiny send button. No keyboard needed.",
   "type": "module",
   "main": "./index.js",
