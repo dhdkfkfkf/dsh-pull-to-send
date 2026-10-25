@@ -16,24 +16,14 @@ Restart DSH once after installing (adding the bundle itself needs a restart; cod
 
 | Action | Result |
 | --- | --- |
-| Press the composer card (a 12px halo around it counts too), pull up past its top edge by **≥24px** | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims; a hint pill reads "release to send · drag back or Esc to cancel"; hovering shows a grab cursor, dragging switches to grabbing |
+| Press the composer card (a 12px halo around it counts too), pull up past its top edge by **≥24px** | Armed: a clone of the input lifts off and follows the pointer (damped follow, slight scale-up, deeper shadow) while the real input shrinks and dims; hovering shows a grab cursor, dragging switches to grabbing |
 | Release while armed | Fires the send control's current primary action (idle = send, generating = queue/steer); the clone FLIPs into the new message bubble with a crossfade |
 | **Drag back into the composer card while armed** | **Disarms**: the clone returns in 150ms and vanishes, the card restores, the draft is untouched; pulling out again in the same press re-arms (you can change your mind as often as you like) |
 | Below threshold / horizontal-dominant drag / released inside the card / pointer leaves the viewport / Esc / pointercancel | Cancel: the clone flies back along its path in 320ms |
 
 > **Breaking change in v0.2.0**: previously, pulling out and then dragging back to release inside the card still sent. Now dragging back cancels — releasing sends nothing.
 
-### Guidance while you pull
-
-Between the press and arming, a pill next to the pointer tells you what is still missing:
-
-| Stage | Pill |
-| --- | --- |
-| Pulled more than 8px | "Keep pulling, past the top of the box" |
-| Empty draft | "Type something first" |
-| Send control unavailable (generating without a queue slot, disconnected, …) | "Can't send right now" |
-
-The pill only appears while pulling and disappears on release or cancel — it never covers the composer.
+No text prompts anywhere: the lifted clone itself is the armed signal.
 
 ## Never interrupted
 
@@ -55,8 +45,6 @@ Zero build, single-file `client.js`; every parameter is a named constant at the 
 | `ARM_DISTANCE` | 24px | Distance past the composer's top edge before arming |
 | `DISARM_RETURN_MS` | 150ms | Clone return time when dragged back into the card |
 | `HIT_PAD` | 12px | Invisible hit-area halo around the card |
-| `HINT_AFTER_PX` | 8px | Pull distance before the hint pill appears (it counts the remaining px down) |
-| `HINT_GAP_PX` | 16px | Gap between the hint pill and the pointer |
 | `DAMPING` | 0.95 | Per-frame follow factor of the clone toward the pointer (higher = tighter tracking) |
 | `MAX_SCALE` | 1.02 | Clone scale at full lift |
 | `FLIP_MS` | 400ms | Flight time of the send FLIP into the bubble |

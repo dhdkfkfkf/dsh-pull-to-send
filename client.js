@@ -95,10 +95,8 @@ window.__ModuleLoader__.load({
 		 *  the press) must not kill a live drag; only a pointer that stays
 		 *  silent this long is considered lost. */
 		const GRACE_MS = 600;
-		/** Pill text while armed: the release contract stays visible. */
-		const ARMED_HINT = '松手即发送 · 拖回或 Esc 取消';
 		/** Plugin version, mirrored into the public debug handle. */
-		const VERSION = '0.2.0';
+		const VERSION = '0.2.1';
 		/** Invisible margin around the card that still counts as a press on it. */
 		const HIT_PAD = 12;
 		/** Pointer types allowed to send. Touch is deliberately excluded. */
@@ -129,10 +127,6 @@ window.__ModuleLoader__.load({
 		const CANCEL_EASING = 'cubic-bezier(0.3, 0, 0.3, 1)';
 		/** Drag-back disarm return time; the clone is already near the card. */
 		const DISARM_RETURN_MS = 150;
-		/** Upward travel before the pre-arm hint appears (px). */
-		const HINT_AFTER_PX = 8;
-		/** Gap between the pre-arm hint pill and the pointer (px). */
-		const HINT_GAP_PX = 16;
 
 		//#endregion
 
@@ -237,60 +231,6 @@ window.__ModuleLoader__.load({
 			document.body.classList.toggle(`${STYLE_ID}-grabbing`, on);
 		}
 
-		/** Drop the pre-arm hint pill, if one is up. */
-		function removeHint(g) {
-			if (g.hint !== null) {
-				g.hint.remove();
-				g.hint = null;
-			}
-		}
-
-		/** Create (or reuse) the hint pill with the given text. */
-		function showHint(g, text) {
-			let pill = g.hint;
-			if (pill === null) {
-				ensureStyle();
-				pill = document.createElement('div');
-				pill.className = `${STYLE_ID}-hint`;
-				document.body.append(pill);
-				g.hint = pill;
-			}
-			pill.textContent = text;
-			return pill;
-		}
-
-		/** Position a hint pill near the pointer, clamped into the viewport. */
-		function placePill(pill, clientX, clientY) {
-			if (pill === null) return;
-			const width = pill.offsetWidth || 120;
-			const left = Math.min(Math.max(clientX, width / 2 + 8), window.innerWidth - width / 2 - 8);
-			pill.style.left = `${Math.round(left)}px`;
-			pill.style.top = `${Math.round(clientY - HINT_GAP_PX)}px`;
-		}
-
-		/**
-		 * Pre-arm guidance: the silent failure modes (pull too shallow, sideways,
-		 * empty draft) become a small pill that follows the pointer, so a pull
-		 * that will not send says why instead of doing nothing.
-		 * @param g - the gesture.
-		 * @param event - the pointermove.
-		 * @param dy - vertical travel from the press point.
-		 * @param dx - horizontal travel from the press point.
-		 * @param aboveTop - pointer height above the card's top edge (may be negative).
-		 */
-		function updateHint(g, event, dy, dx, aboveTop) {
-			if (dy >= 0 || Math.abs(dy) <= Math.abs(dx) || dy > -HINT_AFTER_PX) {
-				removeHint(g);
-				return;
-			}
-			const button = sendButton(g.card);
-			let text;
-			if (button === null) text = '当前无法发送';
-			else if (draftText(g.composer) === '') text = '先输入内容，再上拉发送';
-			else if (aboveTop < ARM_DISTANCE) text = `再拉 ${Math.ceil(ARM_DISTANCE - aboveTop)}px 越过输入框顶部`;
-			else return;
-			placePill(showHint(g, text), event.clientX, event.clientY);
-		}
 
 		/**
 		 * Is the composer editable, not inert, and laid out?
@@ -349,10 +289,6 @@ window.__ModuleLoader__.load({
 .${STYLE_ID}-grabbable, .${STYLE_ID}-grabbable * { cursor: grab; }
 .${STYLE_ID}-grabbable :is(button, a, [role="button"], [aria-haspopup]) { cursor: pointer; }
 body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
-.${STYLE_ID}-hint { position: fixed; z-index: 2147483647; pointer-events: none;
-  transform: translate(-50%, -100%); padding: 4px 10px; border-radius: 999px;
-  background: rgba(20, 20, 24, 0.82); color: #fff; font: 12px/1.5 ui-sans-serif, system-ui, sans-serif;
-  white-space: nowrap; animation: ${STYLE_ID}-fadein 120ms ease both; }
 `;
 			document.head.append(style);
 		}
@@ -489,7 +425,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				targetX: 0, targetY: 0,
 				raf: 0,
 				following: false,
-				hint: null,
 				graceTimer: 0,
 			};
 			window.addEventListener('pointermove', onMove);
@@ -522,7 +457,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			}
 			if (!g.armed) {
 				const aboveTop = g.rect.top - event.clientY;
-				updateHint(g, event, dy, dx, aboveTop);
 				if (aboveTop < ARM_DISTANCE || dy >= 0 || Math.abs(dy) <= Math.abs(dx)) return;
 				const button = sendButton(g.card);
 				if (button === null || draftText(g.composer) === '') return;
@@ -532,7 +466,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				g.targetX = event.clientX - g.grabDx;
 				g.targetY = event.clientY - g.grabDy;
 				followLoop(g);
-				placePill(g.hint, event.clientX, event.clientY);
 			}
 		}
 
@@ -546,11 +479,9 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			// A disarm return still in flight must not leave two clones behind.
 			finishReturn(g);
 			g.armed = true;
-			removeHint(g);
 			ensureStyle();
 			setGrabbing(true);
 			g.clone = makeClone(g.card, g.rect);
-			showHint(g, ARMED_HINT);
 			g.card.classList.add(`${STYLE_ID}-card`, `${STYLE_ID}-card-lifted`);
 			g.x = x - g.grabDx;
 			g.y = y - g.grabDy;
@@ -618,7 +549,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			// the slot must never be stuck, and here it is never stuck forever).
 			if (g.returningClone === null) {
 				gesture = null;
-				removeHint(g);
 			}
 		}
 
@@ -745,7 +675,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			const clone = g.clone;
 			g.clone = null;
 			setGrabbing(false);
-			removeHint(g);
 			clone.style.transition = `left ${DISARM_RETURN_MS}ms ${CANCEL_EASING}, top ${DISARM_RETURN_MS}ms ${CANCEL_EASING}, transform ${DISARM_RETURN_MS}ms ${CANCEL_EASING}`;
 			placeClone(clone, g.rect, 1);
 			shadeClone(clone, 0);
@@ -806,7 +735,6 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			gesture = null;
 			finishReturn(g);
 			setGrabbing(false);
-			removeHint(g);
 			if (g.raf !== 0) cancelAnimationFrame(g.raf);
 			if (g.clone !== null) {
 				g.following = false;
