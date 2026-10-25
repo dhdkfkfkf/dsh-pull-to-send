@@ -38,12 +38,18 @@ dsh plugin --profile desktop add "github:dhdkfkfkf/dsh-pulltosend"
 | --- | --- | --- |
 | `ARM_DISTANCE` | 14px | 越过输入框上边缘多少距离才武装 |
 | `HIT_PAD` | 12px | 卡片四周的隐形响应缓冲区 |
+| `HINT_AFTER_PX` | 8px | 上拉多少距离后开始显示提示气泡 |
+| `HINT_GAP_PX` | 16px | 提示气泡与指针的间距 |
 | `DAMPING` | 0.95 | 副本跟随指针的每帧插值系数（越大越跟手） |
 | `MAX_SCALE` | 1.02 | 拎起时最大放大 |
 | `FLIP_MS` | 400ms | 松手后副本飞入气泡的时长 |
 | `BUBBLE_LEAD_MS` | 80ms | 真气泡提前淡入的提前量 |
 | `RETURN_MS` | 200ms | 真输入框回位时长（不等飞行结束） |
 | `CANCEL_MS` | 320ms | 取消回弹时长 |
+
+## 本地测试台
+
+不装插件、不开 DSH 也能试：用任意浏览器直接打开 `test.html`。页面内置 shim 立即激活 `client.js`，并用 mock DOM 复刻全部锚点（发送、落气泡、模拟回复、排队发送），手势与动画与真实界面同源。
 
 ## 兼容性
 

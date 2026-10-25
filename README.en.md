@@ -38,12 +38,18 @@ Zero build, single-file `client.js`; every parameter is a named constant at the 
 | --- | --- | --- |
 | `ARM_DISTANCE` | 14px | Distance past the composer's top edge before arming |
 | `HIT_PAD` | 12px | Invisible hit-area halo around the card |
+| `HINT_AFTER_PX` | 8px | Pull distance before the hint pill appears |
+| `HINT_GAP_PX` | 16px | Gap between the hint pill and the pointer |
 | `DAMPING` | 0.95 | Per-frame follow factor of the clone toward the pointer (higher = tighter tracking) |
 | `MAX_SCALE` | 1.02 | Clone scale at full lift |
 | `FLIP_MS` | 400ms | Flight time of the send FLIP into the bubble |
 | `BUBBLE_LEAD_MS` | 80ms | How early the real bubble fades in before landing |
 | `RETURN_MS` | 200ms | Real composer return time (does not wait for the flight) |
 | `CANCEL_MS` | 320ms | Cancel fly-back time |
+
+## Local test bench
+
+Try it without installing anything: open `test.html` in any browser. A built-in shim activates `client.js` immediately against a mock DOM that replicates every anchor (sending, bubble landing, a simulated reply, queue-while-generating), so the gesture and animation are the real code paths.
 
 ## Compatibility
 

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PULLTOSEND 手势测试台</title>
+<!--
+  本地测试台：不开 DSH、不装插件，直接在浏览器里测上拉手势与 FLIP 动画。
+
+  用法：双击/直接打开本文件即可（file:// 也行）。
+  原理：client.js 以 window.__ModuleLoader__.load({factory}) 信封注册，
+  下面的 shim 拦下 load() 并立即 factory()+apply({effect})，等于 live 模式；
+  mock DOM 复刻插件依赖的全部锚点（data-composer-card / data-composer-input /
+  data-conversation-session / data-conversation-content / userStack / bubble /
+  发送按钮 aria-label），插件源码一行不改。样式由 client.js 自己注入。
+-->
+<style>
+  :root {
+    --bg: #17171b; --panel: #1f1f25; --line: #2c2c34;
+    --text: #e8e8ec; --muted: #9a9aa4; --accent: #4f7cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 14px/1.6 ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: flex; justify-content: center;
+  }
+  .app { width: min(720px, 100%); display: flex; flex-direction: column; padding: 24px 16px 28px; }
+  header h1 { font-size: 16px; margin: 0 0 2px; }
+  header p { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; }
+  header kbd {
+    font: 11px/1 ui-monospace, monospace; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 5px;
+  }
+
+  /* ---- 会话区（锚点：pane + chat body） ---- */
+  .pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .messages {
+    flex: 1; overflow-y: auto; padding: 8px 4px 16px; min-height: 320px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .row { display: flex; }
+  .row.assistant { justify-content: flex-start; }
+  .row.userStack { justify-content: flex-end; }
+  .bubble {
+    max-width: 78%; padding: 9px 13px; border-radius: 14px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .row.assistant .bubble { background: var(--panel); border: 1px solid var(--line); border-top-left-radius: 4px; }
+  .row.userStack .bubble { background: var(--accent); color: #fff; border-top-right-radius: 4px; }
+
+  /* ---- 输入区（锚点：composer card + editor + send button） ---- */
+  .composer {
+    margin-top: 12px; padding: 12px 12px 10px; border-radius: 14px;
+    background: var(--panel); border: 1px solid var(--line);
+    box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  }
+  .editor {
+    min-height: 64px; max-height: 200px; overflow-y: auto; padding: 2px 4px 8px;
+    outline: none; cursor: text;
+  }
+  .editor:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+  .composer-bar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .composer-bar .tip { color: var(--muted); font-size: 12px; margin-right: auto; }
+  #send {
+    width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--accent); color: #fff; display: grid; place-items: center;
+    transition: opacity .15s, transform .15s;
+  }
+  #send:disabled { opacity: .35; cursor: default; }
+  #send:not(:disabled):hover { transform: scale(1.06); }
+  footer { margin-top: 14px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>PULLTOSEND 手势测试台</h1>
+    <p>按住输入框往上拉，越过顶边松手 = 发送；回拖或 <kbd>Esc</kbd> 取消。武装前的提示气泡会告诉你差在哪一步。</p>
+  </header>
+
+  <div class="pane" data-conversation-session>
+    <div class="messages" data-conversation-content>
+      <div class="row assistant"><div class="bubble">测试台已就绪。试着按住下面的输入框往上拉。</div></div>
+    </div>
+
+    <div class="composer" data-composer-card>
+      <div class="editor" data-composer-input contenteditable="true" data-placeholder="说点什么…（按住我往上拉试试）"></div>
+      <div class="composer-bar">
+        <span class="tip">生成中时按钮变「排队发送」，可以试排队/插话路径</span>
+        <button id="send" aria-label="发送消息" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer>本页只服务本地测试：client.js 由上方 shim 激活，样式由插件自行注入。</footer>
+</div>
+
+<script>
+  // Shim：client.js 注册在 __ModuleLoader__ 上；测试页拦下 load() 立即执行
+  // factory() + apply({effect})，等价于 DSH live 模式加载。
+  window.__ModuleLoader__ = {
+    load(registration) {
+      const exports = registration.factory((spec) => { throw new Error('test page has no require: ' + spec); });
+      exports.apply({ effect(fn) { return fn(); } });
+    },
+  };
+</script>
+<script src="./client.js"></script>
+
+<script>
+  // ---- mock 的 DSH 行为：空草稿禁用发送、发送清空输入、延迟落气泡、模拟回复 ----
+  const editor = document.querySelector('[data-composer-input]');
+  const send = document.getElementById('send');
+  const messages = document.querySelector('[data-conversation-content]');
+  let generating = false;
+  const queue = [];
+
+  function refreshButton() {
+    if (generating) {
+      send.setAttribute('aria-label', '排队发送');
+      send.disabled = false;
+    } else {
+      send.setAttribute('aria-label', '发送消息');
+      send.disabled = editor.textContent.trim() === '';
+    }
+  }
+  editor.addEventListener('input', refreshButton);
+
+  function appendRow(kind, text) {
+    const row = document.createElement('div');
+    row.className = 'row ' + kind;
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    row.append(bubble);
+    messages.append(row);
+    row.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    return row;
+  }
+
+  send.addEventListener('click', () => {
+    const text = editor.textContent.trim();
+    if (generating) { queue.push(text); return; }
+    // 稍作延迟再渲染气泡，贴近 React 的真实节奏，也让插件的去重轮询有活干
+    editor.textContent = '';
+    refreshButton();
+    setTimeout(() => {
+      appendRow('userStack', text);
+      generating = true;
+      refreshButton();
+      setTimeout(() => {
+        generating = false;
+        appendRow('assistant', '（模拟回复）已收到：' + text);
+        while (queue.length > 0) appendRow('userStack', queue.shift() + '（排队补发）');
+        refreshButton();
+        editor.focus();
+      }, 1400);
+    }, 120);
+  });
+
+  refreshButton();
+</script>
+</body>
+</html>

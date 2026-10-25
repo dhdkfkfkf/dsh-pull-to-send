@@ -105,6 +105,10 @@ window.__ModuleLoader__.load({
 		const CANCEL_MS = 320;
 		/** Cancel easing: decelerate back home. */
 		const CANCEL_EASING = 'cubic-bezier(0.3, 0, 0.3, 1)';
+		/** Upward travel before the pre-arm hint appears (px). */
+		const HINT_AFTER_PX = 8;
+		/** Gap between the pre-arm hint pill and the pointer (px). */
+		const HINT_GAP_PX = 16;
 
 		//#endregion
 
@@ -206,6 +210,50 @@ window.__ModuleLoader__.load({
 			document.body.classList.toggle(`${STYLE_ID}-grabbing`, on);
 		}
 
+		/** Drop the pre-arm hint pill, if one is up. */
+		function removeHint(g) {
+			if (g.hint !== null) {
+				g.hint.remove();
+				g.hint = null;
+			}
+		}
+
+		/**
+		 * Pre-arm guidance: the silent failure modes (pull too shallow, sideways,
+		 * empty draft) become a small pill that follows the pointer, so a pull
+		 * that will not send says why instead of doing nothing.
+		 * @param g - the gesture.
+		 * @param event - the pointermove.
+		 * @param dy - vertical travel from the press point.
+		 * @param dx - horizontal travel from the press point.
+		 * @param aboveTop - pointer height above the card's top edge (may be negative).
+		 */
+		function updateHint(g, event, dy, dx, aboveTop) {
+			if (dy >= 0 || Math.abs(dy) <= Math.abs(dx) || dy > -HINT_AFTER_PX) {
+				removeHint(g);
+				return;
+			}
+			const button = sendButton(g.card);
+			let text;
+			if (button === null) text = '当前无法发送';
+			else if (draftText(g.composer) === '') text = '先输入内容，再上拉发送';
+			else if (aboveTop < ARM_DISTANCE) text = '继续上拉，越过输入框顶部';
+			else return;
+			let pill = g.hint;
+			if (pill === null) {
+				ensureStyle();
+				pill = document.createElement('div');
+				pill.className = `${STYLE_ID}-hint`;
+				document.body.append(pill);
+				g.hint = pill;
+			}
+			pill.textContent = text;
+			const width = pill.offsetWidth || 120;
+			const left = Math.min(Math.max(event.clientX, width / 2 + 8), window.innerWidth - width / 2 - 8);
+			pill.style.left = `${Math.round(left)}px`;
+			pill.style.top = `${Math.round(event.clientY - HINT_GAP_PX)}px`;
+		}
+
 		/**
 		 * Is the composer editable, not inert, and laid out?
 		 * @param el - candidate composer.
@@ -263,6 +311,10 @@ window.__ModuleLoader__.load({
 .${STYLE_ID}-grabbable, .${STYLE_ID}-grabbable * { cursor: grab; }
 .${STYLE_ID}-grabbable :is(button, a, [role="button"], [aria-haspopup]) { cursor: pointer; }
 body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+.${STYLE_ID}-hint { position: fixed; z-index: 2147483647; pointer-events: none;
+  transform: translate(-50%, -100%); padding: 4px 10px; border-radius: 999px;
+  background: rgba(20, 20, 24, 0.82); color: #fff; font: 12px/1.5 ui-sans-serif, system-ui, sans-serif;
+  white-space: nowrap; animation: ${STYLE_ID}-fadein 120ms ease both; }
 `;
 			document.head.append(style);
 		}
@@ -394,6 +446,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 				targetX: 0, targetY: 0,
 				raf: 0,
 				following: false,
+				hint: null,
 			};
 			window.addEventListener('pointermove', onMove);
 			window.addEventListener('pointerup', onRelease);
@@ -415,6 +468,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			if (g.composer.hasAttribute('data-composer-composing')) { cancelGesture(); return; }
 			if (!g.armed) {
 				const aboveTop = g.rect.top - event.clientY;
+				updateHint(g, event, dy, dx, aboveTop);
 				if (aboveTop < ARM_DISTANCE || dy >= 0 || Math.abs(dy) <= Math.abs(dx)) return;
 				const button = sendButton(g.card);
 				if (button === null || draftText(g.composer) === '') return;
@@ -435,6 +489,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 		 */
 		function arm(g, x, y) {
 			g.armed = true;
+			removeHint(g);
 			ensureStyle();
 			setGrabbing(true);
 			g.clone = makeClone(g.card, g.rect);
@@ -484,8 +539,13 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 					send(g, button);
 					return;
 				}
+				flyBack(g);
+				return;
 			}
-			if (g.armed && g.clone !== null) flyBack(g);
+			// A pull that never armed is a quiet no-op — but the gesture slot
+			// must be freed, or every later press is swallowed (v0.1.2 fix).
+			gesture = null;
+			removeHint(g);
 		}
 
 		/**
@@ -603,6 +663,7 @@ body.${STYLE_ID}-grabbing, body.${STYLE_ID}-grabbing * { cursor: grabbing !impor
 			detach();
 			gesture = null;
 			setGrabbing(false);
+			removeHint(g);
 			if (g.raf !== 0) cancelAnimationFrame(g.raf);
 			if (g.clone !== null) {
 				g.following = false;
