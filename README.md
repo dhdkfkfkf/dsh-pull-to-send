@@ -82,10 +82,6 @@ window.__DSH_PULLTOSEND__.version     // 确认插件确实加载了
 
 `disable()` 会摘掉全部监听器并把已拎起的副本收回；刷新页面即恢复。
 
-## 本地测试台
-
-不装插件、不开 DSH 也能试：用任意浏览器直接打开 `test.html`。页面内置 shim 立即激活 `client.js`，并用 mock DOM 复刻全部锚点（发送、落气泡、模拟回复、排队发送），手势与动画与真实界面同源。
-
 ## 兼容性
 
 同时兼容 claude-style 与原生界面（两者共用同一套 `data-composer-*` 锚点）；多个会话窗格各自绑定各自的手势。已验证发送路径：对发送按钮的程序化 `.click()` 在 React/Lexical 下真实触发发送（CDP 探针实测）。

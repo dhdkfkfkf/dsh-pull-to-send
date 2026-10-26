@@ -82,10 +82,6 @@ window.__DSH_PULLTOSEND__.version     // confirm the plugin is actually loaded
 
 `disable()` removes every listener and puts back any lifted clone; reload the page to re-enable.
 
-## Local test bench
-
-Try it without installing anything: open `test.html` in any browser. A built-in shim activates `client.js` immediately against a mock DOM that replicates every anchor (sending, bubble landing, a simulated reply, queue-while-generating), so the gesture and animation are the real code paths.
-
 ## Compatibility
 
 Works in both the claude-style and the native surface (they share the same `data-composer-*` anchors); embedded conversation panes each get their own gesture. The send path is verified: a programmatic `.click()` on the send button really sends under React/Lexical (measured with a CDP probe).

@@ -96,7 +96,7 @@ window.__ModuleLoader__.load({
 		 *  silent this long is considered lost. */
 		const GRACE_MS = 600;
 		/** Plugin version, mirrored into the public debug handle. */
-		const VERSION = '0.3.0';
+		const VERSION = '0.3.1';
 		/** Invisible margin around the card that still counts as a press on it. */
 		const HIT_PAD = 12;
 		/** Gap kept between the usable drop band and the window edge. Small on
